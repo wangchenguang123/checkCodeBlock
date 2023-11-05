@@ -1,8 +1,13 @@
 import tree_sitter
 
-py_LANGUAGE = tree_sitter.Language('/datapro/wcg/build/my-languages.so', 'python')
+py_LANGUAGE = tree_sitter.Language('build/my-languages.so', 'python')
 py_parser = tree_sitter.Parser()
 py_parser.set_language(py_LANGUAGE)
+
+with open('fileresource/test.py', 'r') as file:
+    code = file.read()
+source_p = py_parser.parse(bytes(code, 'utf-8'))
+archWord = []
 
 
 def find_code_lines(target_code, code):
