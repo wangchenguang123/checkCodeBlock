@@ -1,5 +1,12 @@
 import tree_sitter
 
+from tree_sitter_parser.business import find_functions_with_arch_words
+from tree_sitter_parser.domain import get_up_node_for_assignment, get_all_class_definitions, get_up_node_for_function, \
+    get_up_node_for_class, find_code_lines, get_nodes_list_within_start_end, find_preproc_if_binary_expressions_python, \
+    get_block_function_parent, get_elif_sibling_node_list_in_fun_python, get_same_sibling_node_code_list, \
+    get_target_code_function_name, get_all_function_names, get_function_body, get_target_code_class_name, \
+    get_class_definition_body
+
 py_LANGUAGE = tree_sitter.Language('build/my-languages.so', 'python')
 py_parser = tree_sitter.Parser()
 py_parser.set_language(py_LANGUAGE)
@@ -10,120 +17,77 @@ source_p = py_parser.parse(bytes(code, 'utf-8'))
 archWord = []
 
 
-def find_code_lines(target_code, code):
-    code_lines = code.split('\n')
-    target_lines = target_code.split('\n')
-
-    line_count = 0
-    matches = []
-    for idx, line in enumerate(code_lines):
-        line_count += 1
-        if target_lines[0] in line and code_lines[idx:idx + len(target_lines)] == target_lines:
-            start_line = line_count
-            end_line = line_count + len(target_lines) - 1
-            matches.append((start_line, end_line))
-
-    return matches
+def find_class_with_arch_words(class_names):
+    pass
 
 
-def find_function_definition(tree, start_line, end_line):
-    def traverse(node):
-        start = node.start_point[0]
-        end = node.end_point[0]
-
-        if start <= end_line and end >= start_line:
-            if node.type == 'function_definition':
-                return node
-            else:
-                parent = node.parent
-                if parent and parent.type == 'function_definition':
-                    return parent
-
-        for child in node.children:
-            result = traverse(child)
-            if result:
-                return result
-
-    root_node = tree.root_node
-    function_node = traverse(root_node)
-    return function_node
-
-
-def extract_code_in_range(source_code, start_line, end_line):
-    lines = source_code.split('\n')
-    code_lines = lines[start_line - 1: end_line]
-
-    return '\n'.join(code_lines)
-
-
-def find_and_extract_function_definition(source_code, start_line, end_line):
-    tree = py_parser.parse(bytes(source_code, "utf8"))
-    function_node = find_function_definition(tree, start_line, end_line)
-    if function_node:
-        start_line = function_node.start_point[0] + 1
-        end_line = function_node.end_point[0] + 1
-        code_snippet = extract_code_in_range(source_code, start_line, end_line)
-        return code_snippet
-    return None
-
-
-function_names = []
-
-
-def extract_function_names(node):
-    if node.type == 'function_definition':
-        function_name_node = node.children[1]
-        function_names.append(code[function_name_node.start_byte:function_name_node.end_byte])
-    for child in node.children:
-        extract_function_names(child)
-
-
-def get_function_body(tree, target_function_name):
-    def find_function_code(node):
-        if node.type == 'function_definition':
-            function_name_node = node.children[1]
-            function_name = code[function_name_node.start_byte:function_name_node.end_byte]
-            if function_name == target_function_name:
-                # 找到目标函数名，提取整个函数定义
-                return code[node.start_byte:node.end_byte]
-
-        for child in node.children:
-            result = find_function_code(child)
-            if result:
-                return result
-
-    return find_function_code(tree.root_node)
-
-
-def find_function_containing_code(source_parser, code_to_find):
-    for node in source_parser.root_node.children:
-        if node.type == 'function_definition':
-            function_code = code[node.start_byte: node.end_byte]
-            if code_to_find in function_code:
-                # Extract the function name
-                function_name_node = node.children[1]
-                function_name = code[function_name_node.start_byte: function_name_node.end_byte]
-                print(f"Function containing code: {function_name}")
-
-
-def get_target_code_type(target_code):
+def analysis_py(target_code, source_code):
+    source_p = py_parser.parse(bytes(source_code, 'utf-8'))
     target_p = py_parser.parse(bytes(target_code, 'utf-8'))
-    target_root = target_p.root_node
-    node = target_root.children[0]
-    node_type = node.type
-    if node_type == "function_definition":
-        function_name_node = node.children[1]
-        function_name = target_code[function_name_node.start_byte: function_name_node.end_byte]
-        return function_name
-
-
-def find_functions_with_arch_words(function_names):
-    # List to store functions containing arch words
-    functions_with_arch_words = []
-
-    for function_name in function_names:
-        arch_found = [word for word in archWord if word in function_name.lower()]
-        if arch_found:
-            functions_with_arch_words.append({'function_name': function_name, 'architectures': arch_found})
-
-    return functions_with_arch_words
+    lines = find_code_lines(target_code, source_code)
+    print(lines)
+    loongarch_code = ""
+    for line in lines:
+        start_line = line[0] - 1
+        end_line = line[1] - 1
+        node_type_list = get_nodes_list_within_start_end(source_p.root_node, start_line, end_line)
+        print(node_type_list)
+        if node_type_list[0].type in ["if_statement", "expression_statement", "return_statement"]:
+            loongarch_code = get_up_node_for_function(node_type_list[0])
+            if not loongarch_code:
+                loongarch_code = get_up_node_for_class(node_type_list[0])
+            print(loongarch_code)
+        elif node_type_list[0].type == "call" or node_type_list[0].type == "not_operator":
+            bi_list = find_preproc_if_binary_expressions_python(source_p.root_node, start_line, end_line)
+            if bi_list:
+                for bi in bi_list:
+                    if bi.type == "if_statement":
+                        loongarch_code = get_up_node_for_function(bi)
+                    else:
+                        loongarch_code = bi.text.decode()
+            else:
+                loongarch_code = get_up_node_for_assignment(node_type_list[0])
+            if not loongarch_code:
+                print(11)
+                loongarch_code = get_up_node_for_function(node_type_list[0])
+            print(loongarch_code)
+        elif node_type_list[0].type == "block":
+            loongarch_code = get_block_function_parent(node_type_list[0])
+            print(loongarch_code)
+        elif node_type_list[0].type == "elif_clause":  ## 存在问题
+            sibling_node_list = get_elif_sibling_node_list_in_fun_python(node_type_list[0])
+            code_list = get_same_sibling_node_code_list(source_code, sibling_node_list)
+            for code in code_list:
+                print("---------------------------------------------------------------------")
+                print(code)
+        elif node_type_list[0].type == "function_definition":
+            function_name = get_target_code_function_name(target_code, target_p)
+            if function_name:
+                for key in archWord:
+                    if function_name.find(key) > -1:
+                        function_names = get_all_function_names(source_p.root_node, source_code)
+                        if function_names:
+                            analysis_function_names = find_functions_with_arch_words(function_names)
+                            for analysis_function_name in analysis_function_names:
+                                code_body = get_function_body(source_p, source_code,
+                                                              analysis_function_name.get("function_name"))
+                                code_map = {"arch_word": analysis_function_name.get("architectures")[0],
+                                            "code_body": code_body}
+                                print(code_map)
+        elif node_type_list[0].type in ["pair", "list", "set", "tuple", "string", "keyword_argument"]:
+            loongarch_code = get_up_node_for_assignment(node_type_list[0])
+            print(loongarch_code)
+        elif node_type_list[0].type == "class_definition":
+            class_name = get_target_code_class_name(node_type_list)
+            if class_name:
+                for key in archWord:
+                    if class_name.find(key) > -1:
+                        class_names = get_all_class_definitions(source_p.root_node, source_code)
+                        if class_names:
+                            analysis_class_names = find_class_with_arch_words(class_names)
+                            for analysis_class_name in analysis_class_names:
+                                code_body = get_class_definition_body(source_p, source_code,
+                                                                      analysis_class_name.get("function_name"))
+                                code_map = {"arch_word": analysis_class_name.get("architectures")[0],
+                                            "code_body": code_body}
+                                print(code_map)
