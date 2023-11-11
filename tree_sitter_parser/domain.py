@@ -1,5 +1,5 @@
-from NewUtils.FileUtils import read_file_as_string
-from NewUtils.TreeSitterInit import TreeSitterParser
+from tree_sitter_parser.TreeSitterInit import TreeSitterParser
+from utils.FileUtils import read_file_as_string
 
 so_path = "/datapro/wcg/build/my-languages.so"
 
@@ -18,7 +18,6 @@ def get_parser(filepath):
 def get_source_code(filepath):
     data = read_file_as_string(filepath)
     return data
-
 
 def get_target_code_type_list(target_parser):
     # target_p = sitter_parser.parse(bytes(target_code, 'utf-8'))
@@ -122,7 +121,7 @@ def get_elif_sibling_node_list_in_fun_c(node, node_type, is_c_or_cpp):
 def get_elif_sibling_node_list_in_fun_cpp(node):
     function_name = check_function_name(node, "cpp")
     node_list = []
-    # 如果是兄弟结点中的第一个if结点，直接找孩子结点
+    #如果是兄弟结点中的第一个if结点，直接找孩子结点
     if node.type == "preproc_if":
         node_list.append(node)
         for n in node.children:
@@ -142,11 +141,10 @@ def get_elif_sibling_node_list_in_fun_cpp(node):
     else:
         return node_list, None
 
-
 def get_elif_sibling_node_list_in_fun_python(node):
     # function_name = check_function_name(node,is_c_or_cpp)
     node_list = []
-    # 如果是兄弟结点中的第一个if结点，直接找孩子结点
+    #如果是兄弟结点中的第一个if结点，直接找孩子结点
     if node.type == "if_statement":
         node_list.append(node)
         for n in node.children:
@@ -189,6 +187,7 @@ def get_elif_sibling_node_list_out_fun(node, node_type):
             node = node.parent  # preproc_if
 
         node_list.append(node)
+
 
         while node_list[-1].type != "preproc_else":
             for n in node_list[-1].children:
@@ -341,7 +340,6 @@ def get_up_node_for_preproc_if(node):
         node = node.parent
     return node.text
 
-
 def get_up_node_for_assignment(node):
     get_node = node.prev_sibling
     function_code = ""
@@ -352,7 +350,6 @@ def get_up_node_for_assignment(node):
         get_node = get_node.parent
     return function_code
 
-
 def get_up_node_for_class(node):
     get_node = node.prev_sibling
     function_code = ""
@@ -362,7 +359,6 @@ def get_up_node_for_class(node):
             break
         get_node = get_node.parent
     return function_code
-
 
 def get_all_class_definitions(node, source_code):
     class_definitions = []
@@ -378,21 +374,31 @@ def get_all_class_definitions(node, source_code):
     get_names(node)
     return class_definitions
 
-
 def get_all_function_names(node, source_code):
     function_names = []
 
     def get_names(node):
         nonlocal function_names
         if node.type == 'function_definition':
-            function_name_node = node.children[1]
-            function_names.append(source_code[function_name_node.start_byte:function_name_node.end_byte])
+            function_name_node = find_identifier_child(node)
+            if function_name_node:
+                function_names.append(source_code[function_name_node.start_byte:function_name_node.end_byte])
         for child in node.children:
             get_names(child)
 
+    def find_identifier_child(parent_node):
+        for child in parent_node.children:
+            if child.type == 'identifier':
+                return child
+            elif child.child_count > 0:
+                # Recursively search for an identifier in the child's subtree
+                result = find_identifier_child(child)
+                if result:
+                    return result
+        return None
+
     get_names(node)
     return function_names
-
 
 def get_block_function_parent(node):
     while node:
@@ -407,20 +413,11 @@ def get_block_function_parent(node):
 
 def get_target_code_function_name(target_code, target_parser):
     target_root = target_parser.root_node
-    # if len(target_root.children) == 1:
-    #     node = target_root.children[0]
-    #     node_type = node.type
-    #     if node_type == "function_definition":
-    #         function_name_node = node.children[1]
-    #         function_name = target_code[function_name_node.start_byte: function_name_node.end_byte]
-    #         return function_name
-    # else:
     for node in target_root.children:
         if node.type == "function_definition":
             function_name_node = node.children[1]
             function_name = target_code[function_name_node.start_byte: function_name_node.end_byte]
             return function_name
-
 
 def get_target_code_class_name(node_type_list):
     for node in node_type_list:
@@ -441,9 +438,7 @@ def get_class_definition_body(sitter_parser, source_code, target_function_name):
             result = find_function_code(child)
             if result:
                 return result
-
     return find_function_code(sitter_parser.root_node)
-
 
 def is_in_fun(node):
     while node:
