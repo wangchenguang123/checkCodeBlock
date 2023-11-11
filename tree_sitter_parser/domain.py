@@ -3,7 +3,6 @@ from utils.FileUtils import read_file_as_string
 
 so_path = "/datapro/wcg/build/my-languages.so"
 
-
 def get_parser(filepath):
     treesitter = TreeSitterParser(so_path)
     if filepath.endswith(".c") or filepath.endswith(".h"):
@@ -32,7 +31,6 @@ def choose_first_type(type_list):
 def do_error_type(node):
     if node.type == 'ERROR':
         return True
-
 
 def get_same_sibling_node_code_list(source_code, node_list):
     code_list = []
@@ -386,17 +384,6 @@ def get_all_function_names(node, source_code):
         for child in node.children:
             get_names(child)
 
-    def find_identifier_child(parent_node):
-        for child in parent_node.children:
-            if child.type == 'identifier':
-                return child
-            elif child.child_count > 0:
-                # Recursively search for an identifier in the child's subtree
-                result = find_identifier_child(child)
-                if result:
-                    return result
-        return None
-
     get_names(node)
     return function_names
 
@@ -409,15 +396,6 @@ def get_block_function_parent(node):
             node = node.parent
         node = node.parent
     return None
-
-
-def get_target_code_function_name(target_code, target_parser):
-    target_root = target_parser.root_node
-    for node in target_root.children:
-        if node.type == "function_definition":
-            function_name_node = node.children[1]
-            function_name = target_code[function_name_node.start_byte: function_name_node.end_byte]
-            return function_name
 
 def get_target_code_class_name(node_type_list):
     for node in node_type_list:
@@ -438,7 +416,9 @@ def get_class_definition_body(sitter_parser, source_code, target_function_name):
             result = find_function_code(child)
             if result:
                 return result
+
     return find_function_code(sitter_parser.root_node)
+
 
 def is_in_fun(node):
     while node:
@@ -446,3 +426,84 @@ def is_in_fun(node):
             return True
         node = node.parent
     return False
+
+
+def get_all_function_definitions(ast_tree, source_code):
+    # Find all function nodes
+    function_nodes = find_all_function_nodes(ast_tree.root_node)
+    function_definitions = []
+    # Extract the function definitions
+    for function_node in function_nodes:
+        function_name_node = find_identifier_child(function_node)
+        if function_name_node:
+            function_name = source_code[function_name_node.start_byte:function_name_node.end_byte]
+            function_body_node = find_function_body_node(function_node)
+            print(function_body_node)
+            if function_body_node:
+                function_body = source_code[function_body_node.start_byte:function_body_node.end_byte]
+                function_definitions.append({'name': function_name, 'body': function_body})
+
+    return function_definitions
+
+
+def find_all_function_nodes(parent_node):
+    function_nodes = []
+    for child in parent_node.children:
+        if child.type == 'function_definition':
+            function_nodes.append(child)
+        elif child.child_count > 0:
+            function_nodes.extend(find_all_function_nodes(child))
+    return function_nodes
+
+
+def find_function_body_node(function_node):
+    for child in function_node.children:
+        if child.type == 'compound_statement':
+            return child
+        elif child.child_count > 0:
+            # Recursively search for a block in the child's subtree
+            result = find_function_body_node(child)
+            if result:
+                return result
+    return None
+
+
+def find_identifier_child(parent_node):
+    for child in parent_node.children:
+        if child.type == 'identifier':
+            return child
+        elif child.child_count > 0:
+            # Recursively search for an identifier in the child's subtree
+            result = find_identifier_child(child)
+            if result:
+                return result
+    return None
+
+
+def find_function_node(parent_node, source_code, target_function_name):
+    for child in parent_node.children:
+        if child.type == 'function_definition':
+            # Check if this is the target function
+            function_name_node = find_identifier_child(child)
+            if function_name_node:
+                function_name = source_code[function_name_node.start_byte:function_name_node.end_byte]
+                if function_name == target_function_name:
+                    return child
+        elif child.child_count > 0:
+            # Recursively search for a function in the child's subtree
+            result = find_function_node(child, source_code, target_function_name)
+            if result:
+                return result
+    return None
+
+
+def get_function_body(ast_tree, source_code, target_function_name):
+    function_node = find_function_node(ast_tree.root_node, source_code, target_function_name)
+
+    if function_node:
+        # Extract the function body
+        function_body_node = find_function_body_node(function_node)
+        if function_body_node:
+            return source_code[function_body_node.start_byte:function_body_node.end_byte]
+
+    return None
