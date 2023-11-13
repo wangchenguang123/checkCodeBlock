@@ -1,81 +1,33 @@
 import tree_sitter
 
+from tree_sitter_parser.domain import find_code_lines, get_nodes_list_within_start_end, get_node_with_start_row, \
+    is_in_fun, get_elif_sibling_node_list_in_fun_c, get_elif_sibling_node_list_out_fun, get_same_sibling_node_code_list
+
 C_LANGUAGE = tree_sitter.Language('build/my-languages.so', 'c')
 c_parser = tree_sitter.Parser()
 c_parser.set_language(C_LANGUAGE)
 
 
-def get_line_number(source_code, index):
-    return source_code.count('\n', 0, index) + 1
-
-
-def get_node_types_in_range(source_code, start_line, end_line):
-    tree = c_parser.parse(bytes(source_code, "utf8"))
-
-    function_node = find_function_definition(tree, start_line, end_line)
-
-    if function_node:
-        return {
-            "type": function_node.type,
-            "start_line": function_node.start_point[0] + 1,
-            "end_line": function_node.end_point[0] + 1
-        }
-
-    return None
-
-
-def find_function_definition(tree, start_line, end_line):
-    def traverse(node):
-        start = node.start_point[0]
-        end = node.end_point[0]
-
-        if start <= end_line and end >= start_line:
-            if node.type == 'function_definition':
-                return node
+def analysis_c(target_code, source_code):
+    source_p = c_parser.parse(bytes(source_code, 'utf-8'))
+    target_p = c_parser.parse(bytes(target_code, 'utf-8'))
+    lines = find_code_lines(target_code, source_code)
+    loongarch_code = ""
+    for line in lines:
+        start_line = line[0] - 1
+        end_line = line[1] - 1
+        node_type_list = get_nodes_list_within_start_end(source_p.root_node, start_line, end_line)
+        print(node_type_list)
+        if node_type_list[0].type in ["preproc_elif", "preproc_ifdef", "#elif"]:
+            node = get_node_with_start_row(source_p.root_node, start_line)
+            is_in = is_in_fun(node)
+            if is_in:
+                sibling_node_list, function_name = get_elif_sibling_node_list_in_fun_c(node, node.type, "c")
             else:
-                parent = node.parent
-                if parent and parent.type == 'function_definition':
-                    return parent
-
-        for child in node.children:
-            result = traverse(child)
-            if result:
-                return result
-
-    root_node = tree.root_node
-    function_node = traverse(root_node)
-    return function_node
-
-
-def extract_code_in_range(source_code, start_line, end_line):
-    lines = source_code.split('\n')
-    code_lines = lines[start_line - 1: end_line]
-
-    return '\n'.join(code_lines)
-
-
-def find_and_extract_function_definition(source_code, start_line, end_line):
-    tree = c_parser.parse(bytes(source_code, "utf8"))
-    function_node = find_function_definition(tree, start_line, end_line)
-    if function_node:
-        start_line = function_node.start_point[0] + 1
-        end_line = function_node.end_point[0] + 1
-        code_snippet = extract_code_in_range(source_code, start_line, end_line)
-        return code_snippet
-    return None
-
-
-def find_code_lines(target_code, code):
-    code_lines = code.split('\n')
-    target_lines = target_code.split('\n')
-
-    line_count = 0
-    matches = []
-    for idx, line in enumerate(code_lines):
-        line_count += 1
-        if target_lines[0] in line and code_lines[idx:idx + len(target_lines)] == target_lines:
-            start_line = line_count
-            end_line = line_count + len(target_lines) - 1
-            matches.append((start_line, end_line))
-
-    return matches
+                sibling_node_list = get_elif_sibling_node_list_out_fun(node, node.type)
+            if sibling_node_list:
+                print(sibling_node_list)
+                code_list = get_same_sibling_node_code_list(source_code, sibling_node_list)
+                for code in code_list:
+                    print("---------------------------------------------------------------------")
+                    print(code)

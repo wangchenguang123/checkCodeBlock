@@ -4,7 +4,7 @@ from tree_sitter_parser.business import find_functions_with_arch_words
 from tree_sitter_parser.domain import get_up_node_for_assignment, get_all_class_definitions, get_up_node_for_function, \
     get_up_node_for_class, find_code_lines, get_nodes_list_within_start_end, find_preproc_if_binary_expressions_python, \
     get_block_function_parent, get_elif_sibling_node_list_in_fun_python, get_same_sibling_node_code_list, \
-    get_target_code_function_name, get_all_function_names, get_function_body, get_target_code_class_name, \
+    get_all_function_names, get_function_body, get_target_code_class_name, \
     get_class_definition_body
 
 py_LANGUAGE = tree_sitter.Language('build/my-languages.so', 'python')
@@ -61,19 +61,20 @@ def analysis_py(target_code, source_code):
                 print("---------------------------------------------------------------------")
                 print(code)
         elif node_type_list[0].type == "function_definition":
-            function_name = get_target_code_function_name(target_code, target_p)
-            if function_name:
+            function_names = get_all_function_names(target_p.root_node, target_code)
+            if function_names:
                 for key in archWord:
-                    if function_name.find(key) > -1:
-                        function_names = get_all_function_names(source_p.root_node, source_code)
-                        if function_names:
-                            analysis_function_names = find_functions_with_arch_words(function_names)
-                            for analysis_function_name in analysis_function_names:
-                                code_body = get_function_body(source_p, source_code,
-                                                              analysis_function_name.get("function_name"))
-                                code_map = {"arch_word": analysis_function_name.get("architectures")[0],
-                                            "code_body": code_body}
-                                print(code_map)
+                    if len(function_names) == 1:
+                        if function_names[0].find(key) > -1:
+                            function_source_names = get_all_function_names(source_p.root_node, source_code)
+                            if function_source_names:
+                                analysis_function_names = find_functions_with_arch_words(function_source_names)
+                                for analysis_function_name in analysis_function_names:
+                                    code_body = get_function_body(source_p, source_code,
+                                                                  analysis_function_name.get("function_name"), "python")
+                                    code_map = {"arch_word": analysis_function_name.get("architectures")[0],
+                                                "function_name": code_body["name"], "function_body": code_body["body"]}
+                                    print(code_map)
         elif node_type_list[0].type in ["pair", "list", "set", "tuple", "string", "keyword_argument"]:
             loongarch_code = get_up_node_for_assignment(node_type_list[0])
             print(loongarch_code)
