@@ -19,7 +19,6 @@ def analysis_cpp(target_code, source_code):
     target_p = cpp_parser.parse(bytes(target_code, 'utf-8'))
     lines = find_code_lines(target_code, source_code)
     print(lines)
-    loongarch_code = ""
     for line in lines:
         start_line = line[0] - 1
         end_line = line[1] - 1
@@ -30,6 +29,7 @@ def analysis_cpp(target_code, source_code):
             print(loongarch_code)
         elif node_type_list[0].type == "preproc_if" or node_type_list[0].type == "#elif":
             is_in = is_in_fun(node_type_list[0])
+            function_name = ""
             if is_in:
                 if node_type_list[0].type == "#elif":
                     sibling_node_list, function_name = get_elif_sibling_node_list_in_fun_cpp(node_type_list[0].parent)
