@@ -512,6 +512,26 @@ def get_function_body(ast_tree, source_code, target_function_name, is_c_or_py):
             function_body_node = find_function_body_node(function_node, is_c_or_py)
             if function_body_node:
                 function_body = source_code[function_body_node.start_byte:function_body_node.end_byte]
-                return {'name': function_name, 'body': function_body}
+                # Extract function parameters
+                parameters = get_function_parameters(function_node, source_code)
+                return {'name': function_name, 'body': function_body, 'parameters': parameters}
+    return None
 
+
+def get_function_parameters(function_node, source_code):
+    parameter_list_node = find_function_parameters_node(function_node)
+    if parameter_list_node:
+        return source_code[parameter_list_node.start_byte:parameter_list_node.end_byte]
+    return None
+
+
+# Add a new helper function to find the parameter list node in the function node
+def find_function_parameters_node(function_node):
+    for child in function_node.children:
+        if child.type == 'parameter_list':
+            return child
+        # Recursively search for parameter_list in child nodes
+        parameter_list_node = find_function_parameters_node(child)
+        if parameter_list_node:
+            return parameter_list_node
     return None
