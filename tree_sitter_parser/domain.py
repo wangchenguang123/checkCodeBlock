@@ -486,37 +486,41 @@ def find_identifier_child(parent_node):
     return None
 
 
-def find_function_node(parent_node, source_code, target_function_name):
-    for child in parent_node.children:
+### 获取多个节点
+def find_function_nodes(ast_node, source_code, target_function_name, target_function_start):
+    matching_function_nodes = []
+
+    for child in ast_node.children:
         if child.type == 'function_definition':
             function_name_node = find_identifier_child(child)
             if function_name_node:
                 function_name = source_code[function_name_node.start_byte:function_name_node.end_byte]
-                if function_name == target_function_name:
-                    return child
-        elif child.child_count > 0:
-            # Recursively search for a function in the child's subtree
-            result = find_function_node(child, source_code, target_function_name)
-            if result:
-                return result
-    return None
+                if function_name == target_function_name and child.start_byte >= target_function_start:
+                    matching_function_nodes.append(child)
+        # 递归在子节点中查找函数节点
+        matching_function_nodes.extend(
+            find_function_nodes(child, source_code, target_function_name, target_function_start))
+
+    return matching_function_nodes
 
 
-def get_function_body(ast_tree, source_code, target_function_name, is_c_or_py):
-    function_node = find_function_node(ast_tree.root_node, source_code, target_function_name)
-    if function_node:
-        # Extract the function name and body
+### 源文件中的有多个重名函数
+def get_function_bodies(ast_tree, source_code, target_function_name, is_c_or_py):
+    function_nodes = find_function_nodes(ast_tree.root_node, source_code, target_function_name, 0)
+    function_list = []
+
+    for function_node in function_nodes:
         function_name_node = find_identifier_child(function_node)
         if function_name_node:
             function_name = source_code[function_name_node.start_byte:function_name_node.end_byte]
             function_body_node = find_function_body_node(function_node, is_c_or_py)
             if function_body_node:
                 function_body = source_code[function_body_node.start_byte:function_body_node.end_byte]
-                # Extract function parameters
+                # 提取函数参数
                 parameters = get_function_parameters(function_node, source_code)
-                return {'name': function_name, 'body': function_body, 'parameters': parameters}
-    return None
+                function_list.append({'name': function_name, 'body': function_body, 'parameters': parameters})
 
+    return function_list
 
 def get_function_parameters(function_node, source_code):
     parameter_list_node = find_function_parameters_node(function_node)
@@ -534,4 +538,39 @@ def find_function_parameters_node(function_node):
         parameter_list_node = find_function_parameters_node(child)
         if parameter_list_node:
             return parameter_list_node
+    return None
+
+
+## 单一结点
+def find_function_node(ast_node, source_code, target_function_name, target_function_start):
+    end_row = 0
+    for child in ast_node.children:
+        if child.type == 'function_definition':
+            function_name_node = find_identifier_child(child)
+            if function_name_node:
+                function_name = source_code[function_name_node.start_byte:function_name_node.end_byte]
+                end_row = function_name_node.end_byte
+                print(end_row)
+                if function_name == target_function_name and child.start_byte >= target_function_start:
+                    return child
+        # Recursively search for the function node in child nodes
+        function_node = find_function_node(child, source_code, target_function_name, end_row)
+        if function_node:
+            return function_node
+    return None
+
+
+## 获取一个函数内容
+def get_function_body(ast_tree, source_code, target_function_name, is_c_or_py):
+    function_node = find_function_node(ast_tree.root_node, source_code, target_function_name, 0)
+    if function_node:
+        function_name_node = find_identifier_child(function_node)
+        if function_name_node:
+            function_name = source_code[function_name_node.start_byte:function_name_node.end_byte]
+            function_body_node = find_function_body_node(function_node, is_c_or_py)
+            if function_body_node:
+                function_body = source_code[function_body_node.start_byte:function_body_node.end_byte]
+                # Extract function parameters
+                parameters = get_function_parameters(function_node, source_code)
+                return {'name': function_name, 'body': function_body, 'parameters': parameters}
     return None
