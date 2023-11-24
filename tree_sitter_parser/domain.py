@@ -159,6 +159,72 @@ def get_elif_sibling_node_list_in_fun_python(node):
     return node_list
 
 
+def get_elif_sibling_node_list_in_make(node, node_type):
+    node_list = []
+    if node_type == "elsif_directive":
+        while True:
+            if node.type == "conditional":
+                break
+            node = node.parent
+        node_list.append(node)
+        while node_list[-1].type != "elsif_directive":
+            for n in node_list[-1].children:
+                if n.type == "elsif_directive" or n.type == "else":
+                    node_list.append(n)
+    # elif node_type == "if_command":
+    #     node_list.append(node)
+    #     while node_list[-1].type != "else_command":
+    #         for n in node_list[-1].children:
+    #             if n.type == "elseif_command" or n.type == "else_command":
+    #                 node_list.append(n)
+    elif node_type == "conditional":
+        node_list.append(node)
+        current_node = node  # 用于向下遍历
+        # 向上遍历
+        while node.prev_sibling and node.prev_sibling.type == node_type:
+            node = node.prev_sibling
+            node_list.append(node)
+        # 向下遍历
+
+        while current_node.next_sibling and current_node.next_sibling.type == node_type:
+            current_node = current_node.next_sibling
+            node_list.append(current_node)
+    return node_list
+
+
+def get_elif_sibling_node_list_in_cmake(node, node_type):
+    node_list = []
+    if node_type == "elseif_command" or node_type == "else_command":
+        while True:
+            if node.type == "if_condition":
+                break
+            node = node.parent
+        node_list.append(node)
+        while node_list[-1].type != "else_command":
+            for n in node_list[-1].children:
+                if n.type == "elseif_command" or n.type == "else_command":
+                    node_list.append(n)
+    elif node_type == "if_command":
+        node_list.append(node)
+        while node_list[-1].type != "else_command":
+            for n in node_list[-1].children:
+                if n.type == "elseif_command" or n.type == "else_command":
+                    node_list.append(n)
+    elif node_type == "if_condition":
+        node_list.append(node)
+        current_node = node  # 用于向下遍历
+        # 向上遍历
+        while node.prev_sibling and node.prev_sibling.type == node_type:
+            node = node.prev_sibling
+            node_list.append(node)
+        # 向下遍历
+
+        while current_node.next_sibling and current_node.next_sibling.type == node_type:
+            current_node = current_node.next_sibling
+            node_list.append(current_node)
+    return node_list
+
+
 def get_elif_sibling_node_list_out_fun(node, node_type):
     node_list = []
     if node_type == "preproc_ifdef":
@@ -204,7 +270,6 @@ def get_elif_sibling_node_list_out_fun(node, node_type):
         print("传入的结点不是preproc_if、preproc_elif、preproc_else、preproc_ifdef类型")
 
     return node_list
-
 
 def get_node_with_start_row(node, start_row):
     if node.start_point[0] == start_row:
@@ -297,7 +362,6 @@ def find_code_lines(target_code, source_code):
             end_line = line_count + len(target_lines) - 1
             matches.append((start_line, end_line))
     return matches
-
 
 # def get_function_body(sitter_parser,source_code,target_function_name):
 #     def find_function_code(node):
@@ -451,7 +515,6 @@ def find_all_function_nodes(parent_node):
             function_nodes.extend(find_all_function_nodes(child))
     return function_nodes
 
-
 def find_function_body_node(function_node, is_c_or_py="c"):
     for child in function_node.children:
         if is_c_or_py == "c":
@@ -476,7 +539,7 @@ def find_function_body_node(function_node, is_c_or_py="c"):
 
 def find_identifier_child(parent_node):
     for child in parent_node.children:
-        if child.type == 'identifier':
+        if child.type == 'identifier' and child.parent.type == 'function_declarator':
             return child
         elif child.child_count > 0:
             # Recursively search for an identifier in the child's subtree
@@ -484,7 +547,6 @@ def find_identifier_child(parent_node):
             if result:
                 return result
     return None
-
 
 ### 获取多个节点
 def find_function_nodes(ast_node, source_code, target_function_name, target_function_start):
@@ -502,7 +564,6 @@ def find_function_nodes(ast_node, source_code, target_function_name, target_func
             find_function_nodes(child, source_code, target_function_name, target_function_start))
 
     return matching_function_nodes
-
 
 ### 源文件中的有多个重名函数
 def get_function_bodies(ast_tree, source_code, target_function_name, is_c_or_py):
@@ -528,7 +589,6 @@ def get_function_parameters(function_node, source_code):
         return source_code[parameter_list_node.start_byte:parameter_list_node.end_byte]
     return None
 
-
 # Add a new helper function to find the parameter list node in the function node
 def find_function_parameters_node(function_node):
     for child in function_node.children:
@@ -539,7 +599,6 @@ def find_function_parameters_node(function_node):
         if parameter_list_node:
             return parameter_list_node
     return None
-
 
 ## 单一结点
 def find_function_node(ast_node, source_code, target_function_name, target_function_start):
@@ -558,8 +617,6 @@ def find_function_node(ast_node, source_code, target_function_name, target_funct
         if function_node:
             return function_node
     return None
-
-
 ## 获取一个函数内容
 def get_function_body(ast_tree, source_code, target_function_name, is_c_or_py):
     function_node = find_function_node(ast_tree.root_node, source_code, target_function_name, 0)
